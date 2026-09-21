@@ -1,6 +1,6 @@
 # botDS
 
-`botDS` es un bot privado de Discord para reproducir musica, manejar playlists y buscar imagenes desde el chat. Esta es la version **v0.1.1**.
+`botDS` es un bot privado de Discord para reproducir musica, manejar playlists y buscar imagenes desde el chat. Esta es la version **v0.1.2**.
 
 ## Funciones
 
@@ -11,7 +11,7 @@
 - Muestra un panel grafico con caratula, cancion actual, playlist, siguiente tema y cantidad pendiente.
 - Incluye botones para pausar/reanudar, saltar, mezclar y desconectar.
 - Mantiene comandos `/queue`, `/skip`, `/pause`, `/shuffle`, `/stop` y `/leave`.
-- Busca hasta cinco imagenes mediante Brave Image Search con `/imagen` y usa Wikimedia Commons si no hay clave de Brave.
+- Busca hasta cinco imagenes mediante Brave Image Search con `/imagen`; sin clave usa Bing Images y, como ultimo respaldo, Wikimedia Commons.
 - Se ejecuta aislado en Docker y se reinicia automaticamente.
 
 ## Tecnologias

@@ -61,7 +61,7 @@ function panelEmbed(state) {
       { name: 'En cola', value: String(state.queue.length), inline: true },
       { name: 'Playlist', value: current?.playlist || 'No', inline: true },
       { name: 'Siguiente', value: next?.title || 'No hay mas canciones', inline: false },
-    ).setFooter({ text: 'botDS v0.1.1' }).setTimestamp();
+    ).setFooter({ text: 'botDS v0.1.2' }).setTimestamp();
   if (current?.thumbnail) embed.setThumbnail(current.thumbnail);
   if (current?.spotifyUrl) embed.setURL(current.spotifyUrl);
   return embed;
@@ -216,9 +216,9 @@ client.on('interactionCreate', async interaction => {
     if (name === 'imagen') {
       await interaction.deferReply();
       const query = interaction.options.getString('busqueda', true);
-      const results = await searchImages(query, interaction.options.getInteger('cantidad') || 3);
+      const results = await searchImages(query, interaction.options.getInteger('cantidad') || 1);
       if (!results.length) throw new Error('No encontre imagenes');
-      const embeds = results.map((result, index) => new EmbedBuilder().setColor(0xDE5833).setTitle(`${index + 1}. ${result.title}`.slice(0, 256)).setURL(result.source).setImage(result.image).setFooter({ text: 'Resultados de Brave Image Search' }));
+      const embeds = results.map((result, index) => new EmbedBuilder().setColor(0xDE5833).setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() }).setTitle(`${results.length > 1 ? `${index + 1}. ` : ''}${result.title}`.slice(0, 256)).setURL(result.source).setDescription(`Encontrado en ${result.provider}`).setImage(result.image).setFooter({ text: result.provider }));
       await interaction.editReply({ content: `🔎 **${query}**`, embeds });
       return;
     }
