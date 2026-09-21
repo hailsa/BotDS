@@ -61,7 +61,7 @@ function panelEmbed(state) {
       { name: 'En cola', value: String(state.queue.length), inline: true },
       { name: 'Playlist', value: current?.playlist || 'No', inline: true },
       { name: 'Siguiente', value: next?.title || 'No hay mas canciones', inline: false },
-    ).setFooter({ text: 'botDS v0.1.0' }).setTimestamp();
+    ).setFooter({ text: 'botDS v0.1.1' }).setTimestamp();
   if (current?.thumbnail) embed.setThumbnail(current.thumbnail);
   if (current?.spotifyUrl) embed.setURL(current.spotifyUrl);
   return embed;
