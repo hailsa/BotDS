@@ -1,107 +1,66 @@
 function safeSearchValue() {
-  return (process.env.IMAGE_SAFESEARCH || 'strict').toLowerCase() === 'off' ? 'off' : 'strict';
+  return (process.env.IMAGE_SAFESEARCH || 'off').toLowerCase() === 'off' ? 'off' : 'strict';
 }
 
-export async function searchImages(query, limit = 4) {
+async function request(url, options = {}) {
+  return fetch(url, { ...options, signal: AbortSignal.timeout(15000) });
+}
+
+function decode(value = '') {
+  return value.replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([\da-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)));
+}
+
+function clean(results, count) {
+  const seen = new Set();
+  return results.filter(item => {
+    if (!/^https?:\/\//i.test(item.image || '') || !/^https?:\/\//i.test(item.source || '')) return false;
+    const key = item.image.split('#')[0];
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, count);
+}
+
+export async function searchImages(query, limit = 20) {
+  const count = Math.max(1, Math.min(limit, 50));
   const key = process.env.BRAVE_SEARCH_API_KEY;
-  const count = Math.max(1, Math.min(limit, 5));
-  if (!key) {
-    const bingResults = await searchBing(query, count);
-    return bingResults.length ? bingResults : searchCommons(query, count);
+  if (key) {
+    try {
+      const url = new URL('https://api.search.brave.com/res/v1/images/search');
+      url.search = new URLSearchParams({ q: query, count: String(count), country: 'AR', search_lang: 'es', safesearch: safeSearchValue() });
+      const response = await request(url, { headers: { accept: 'application/json', 'x-subscription-token': key } });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      const results = clean((data.results || []).map(item => ({
+        title: item.title || query, image: item.properties?.url || item.thumbnail?.src,
+        thumbnail: item.thumbnail?.src, source: item.url || item.properties?.url, provider: 'Brave Images',
+      })), count);
+      if (results.length) return results;
+    } catch (error) { console.warn('Brave Images no disponible:', error.message); }
   }
-  const url = new URL('https://api.search.brave.com/res/v1/images/search');
-  url.searchParams.set('q', query);
-  url.searchParams.set('count', String(count));
-  url.searchParams.set('country', 'AR');
-  url.searchParams.set('search_lang', 'es');
-  url.searchParams.set('safesearch', safeSearchValue());
-  const response = await fetch(url, {
-    headers: {
-      accept: 'application/json',
-      'x-subscription-token': key,
-    },
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(`Brave Images: ${data.message || data.error?.message || response.status}`);
-  return (data.results || []).slice(0, count).map(item => ({
-    title: item.title || query,
-    image: item.properties?.url || item.thumbnail?.src,
-    thumbnail: item.thumbnail?.src,
-    source: item.url || item.source || item.properties?.url,
-    provider: 'Brave Image Search',
-  })).filter(item => item.image && item.source);
-}
-
-function decodeAttribute(value) {
-  return value
-    .replace(/&quot;/g, '"')
-    .replace(/&amp;/g, '&')
-    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([\da-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)));
-}
-
-async function searchBing(query, count) {
   const url = new URL('https://www.bing.com/images/search');
-  url.searchParams.set('q', query);
-  url.searchParams.set('form', 'HDRSC2');
-  url.searchParams.set('first', '1');
-  url.searchParams.set('adlt', (process.env.IMAGE_SAFESEARCH || 'strict').toLowerCase() === 'off' ? 'off' : 'strict');
-  const response = await fetch(url, {
-    headers: {
-      'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140 Safari/537.36',
-      'accept-language': 'es-AR,es;q=0.9,en;q=0.7',
-    },
-  });
-  if (!response.ok) return [];
+  url.search = new URLSearchParams({ q: query, form: 'HDRSC2', first: '1', count: String(count), adlt: safeSearchValue() });
+  const response = await request(url, { headers: {
+    'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140.0.0.0 Safari/537.36',
+    'accept-language': 'es-AR,es;q=0.9,en;q=0.7',
+    cookie: `SRCHHPGUSR=ADLT=${safeSearchValue() === 'off' ? 'OFF' : 'STRICT'}`,
+  } });
+  if (!response.ok) throw new Error(`Bing Images no disponible (HTTP ${response.status})`);
   const html = await response.text();
   const results = [];
-  for (const match of html.matchAll(/class="iusc"[^>]*\sm="([^"]+)"/g)) {
+  // Parse metadata independently of attribute order; preserve Bing's relevance ranking.
+  for (const match of html.matchAll(/<a\b[^>]*>/gi)) {
+    const tag = match[0];
+    if (!/\bclass=["'][^"']*\biusc\b[^"']*["']/i.test(tag)) continue;
+    const metadata = tag.match(/\bm="([^"]+)"/i)?.[1];
+    if (!metadata) continue;
     try {
-      const item = JSON.parse(decodeAttribute(match[1]));
-      const original = item.murl;
-      const thumbnail = decodeAttribute(item.turl || '');
-      const renderable = /\.(?:png|jpe?g|gif|webp)(?:$|[?#])/i.test(original || '');
-      const image = renderable ? original : thumbnail;
-      if (!image || !/^https?:\/\//i.test(image) || !/^https?:\/\//i.test(item.purl || '')) continue;
-      results.push({
-        title: item.t || query,
-        image,
-        thumbnail,
-        source: item.purl,
-        provider: 'Bing Images',
-      });
-      if (results.length >= count) break;
-    } catch {
-      // Bing puede incluir tarjetas sin metadatos de imagen; simplemente se omiten.
-    }
+      const item = JSON.parse(decode(metadata));
+      results.push({ title: item.t || query, image: item.murl || item.turl,
+        thumbnail: item.turl, source: item.purl, provider: 'Bing Images' });
+    } catch { /* Ignore malformed cards. */ }
   }
-  return results;
-}
-
-async function searchCommons(query, count) {
-  const url = new URL('https://commons.wikimedia.org/w/api.php');
-  url.search = new URLSearchParams({
-    action: 'query',
-    generator: 'search',
-    gsrsearch: query,
-    gsrnamespace: '6',
-    gsrlimit: String(count),
-    prop: 'imageinfo|info',
-    iiprop: 'url',
-    inprop: 'url',
-    format: 'json',
-    origin: '*',
-  }).toString();
-  const response = await fetch(url, {
-    headers: { 'user-agent': 'botDS/0.1.1 (Discord music and image bot)' },
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(`Wikimedia Commons: ${response.status}`);
-  return Object.values(data.query?.pages || {}).map(page => ({
-    title: page.title?.replace(/^File:/, '') || query,
-    image: page.imageinfo?.[0]?.url,
-    thumbnail: page.imageinfo?.[0]?.thumburl,
-    source: page.imageinfo?.[0]?.descriptionurl || page.fullurl,
-    provider: 'Wikimedia Commons',
-  })).filter(item => item.image && item.source).slice(0, count);
+  return clean(results, count);
 }

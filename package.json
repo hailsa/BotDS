@@ -1,13 +1,13 @@
 {
   "name": "botds",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Bot privado de Discord para musica, playlists e imagenes",
   "scripts": {
     "start": "node src/index.js",
     "auth:spotify": "node src/spotify-auth.js",
-    "check": "node --check src/index.js && node --check src/music.js && node --check src/images.js && node --check src/spotify-auth.js"
+    "check": "node --check src/index.js && node --check src/music.js && node --check src/images.js && node --check src/image-browser.js && node --check src/spotify-auth.js"
   },
   "dependencies": {
     "@discordjs/voice": "^0.19.2",

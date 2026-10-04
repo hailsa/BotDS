@@ -9,7 +9,7 @@ import {
   createAudioPlayer, createAudioResource, entersState, joinVoiceChannel,
 } from '@discordjs/voice';
 import { playableUrl, resolveSpotifyPlaylist, resolveYouTube, shuffle, spotifyPlaylistId } from './music.js';
-import { searchImages } from './images.js';
+import { startImageSearch, handleImageButton } from './image-browser.js';
 
 if (!process.env.DISCORD_TOKEN) throw new Error('Falta DISCORD_TOKEN en .env');
 
@@ -30,9 +30,9 @@ const commands = [
   new SlashCommandBuilder().setName('shuffle').setDescription('Mezcla lo que queda de la cola'),
   new SlashCommandBuilder().setName('stop').setDescription('Detiene y vacia la cola'),
   new SlashCommandBuilder().setName('leave').setDescription('Desconecta el bot'),
-  new SlashCommandBuilder().setName('imagen').setDescription('Busca imagenes con Brave Search')
+  new SlashCommandBuilder().setName('imagen').setDescription('Busca imágenes y recorre los resultados con botones')
     .addStringOption(o => o.setName('busqueda').setDescription('Que queres buscar').setRequired(true))
-    .addIntegerOption(o => o.setName('cantidad').setDescription('Entre 1 y 5').setMinValue(1).setMaxValue(5)),
+    .addIntegerOption(o => o.setName('cantidad').setDescription('Resultados para recorrer: 1 a 50; por defecto 20').setMinValue(1).setMaxValue(50)),
 ].map(command => command.toJSON());
 
 function buttons(paused = false) {
@@ -207,6 +207,10 @@ client.on('interactionCreate', async interaction => {
   if ((!interaction.isChatInputCommand() && !interaction.isButton()) || !interaction.guildId) return;
   try {
     if (interaction.isButton()) {
+      if (interaction.customId.startsWith('image:')) {
+        await handleImageButton(interaction);
+        return;
+      }
       const action = interaction.customId.replace('music_', '');
       await interaction.deferReply({ ephemeral: true });
       await interaction.editReply(await handleControl(interaction, action));
@@ -214,12 +218,7 @@ client.on('interactionCreate', async interaction => {
     }
     const name = interaction.commandName;
     if (name === 'imagen') {
-      await interaction.deferReply();
-      const query = interaction.options.getString('busqueda', true);
-      const results = await searchImages(query, interaction.options.getInteger('cantidad') || 1);
-      if (!results.length) throw new Error('No encontre imagenes');
-      const embeds = results.map((result, index) => new EmbedBuilder().setColor(0xDE5833).setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() }).setTitle(`${results.length > 1 ? `${index + 1}. ` : ''}${result.title}`.slice(0, 256)).setURL(result.source).setDescription(`Encontrado en ${result.provider}`).setImage(result.image).setFooter({ text: result.provider }));
-      await interaction.editReply({ content: `🔎 **${query}**`, embeds });
+      await startImageSearch(interaction);
       return;
     }
     if (name === 'play' || name === 'playlist') {
